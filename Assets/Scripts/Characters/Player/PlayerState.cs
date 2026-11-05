@@ -1,5 +1,6 @@
 // Base class for all player states in the finite-state machine.
 // Each concrete state handles a specific player action or mode, such as idle, walking, or attacking.
+[System.Serializable]
 public abstract class PlayerState
 {
     // Reference to the player controller that owns this state.

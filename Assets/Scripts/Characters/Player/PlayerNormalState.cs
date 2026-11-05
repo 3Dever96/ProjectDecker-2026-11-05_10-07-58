@@ -1,5 +1,8 @@
+using UnityEngine;
+
 // Default movement state for the player.
 // This state is used when the player is in a normal walking/idle mode and not in a special action state.
+[System.Serializable]
 public class PlayerNormalState : PlayerState
 {
     // Store a reference to the player controller so this state can read and update player data.

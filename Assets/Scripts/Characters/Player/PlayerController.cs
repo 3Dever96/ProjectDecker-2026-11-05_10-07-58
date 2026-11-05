@@ -11,7 +11,8 @@ public class PlayerController : MonoBehaviour
     public PlayerState CurrentState { get; private set; }
 
     // The default walking state for the player.
-    public PlayerNormalState NormalState { get; private set; } = new PlayerNormalState(this);
+    // This instance is created in Start so the player has a valid state to enter immediately.
+    [field: SerializeField] public PlayerNormalState NormalState { get; private set; }
 
     [Header("Collision Settings")]
     // Small downward offset used when checking if the player is grounded.
@@ -45,6 +46,9 @@ public class PlayerController : MonoBehaviour
 
         // Store the camera so input can be converted into world-relative directions.
         cam = Camera.main.transform;
+
+        // Create the default state instance and attach it to this controller.
+        NormalState = new PlayerNormalState(this);
 
         // Begin the player in the normal state.
         SetState(NormalState);

@@ -536,12 +536,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6dbe28761015b85419b7dfe4c2ec9732, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
-  groundOffset: {x: 0, y: 0.365, z: 0}
-  forwardOffset: {x: 0, y: 0, z: 0}
-  checkRadius: 0.37
-  moveSpeed: 5
-  stickForce: -5
-  gravity: -20
+  <NormalState>k__BackingField:
+    moveSpeed: 5
+    stickForce: -5
+  <GroundOffset>k__BackingField: {x: 0, y: 0.365, z: 0}
+  <ForwardOffset>k__BackingField: {x: 0, y: 0, z: 0}
+  <CheckRadius>k__BackingField: 0.37
 --- !u!143 &483840507
 CharacterController:
   m_ObjectHideFlags: 0
