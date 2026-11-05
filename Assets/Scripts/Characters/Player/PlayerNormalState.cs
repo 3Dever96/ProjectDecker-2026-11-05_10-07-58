@@ -1,47 +1,59 @@
 using UnityEngine;
 
 // Default movement state for the player.
-// This state is used when the player is in a normal walking/idle mode and not in a special action state.
+// This is the standard walking/idle state used whenever the player is not in a special action or combat state.
 [System.Serializable]
 public class PlayerNormalState : PlayerState
 {
-    // Store a reference to the player controller so this state can read and update player data.
+    // Hold a reference to the player controller so this state can read input, update movement, and trigger animation.
     public PlayerNormalState(PlayerController controller) : base(controller) { }
 
-    // Movement speed for the player while in this normal state.
+    // Base speed for normal movement while this state is active.
     [SerializeField] private float moveSpeed = 5f;
 
-    // Vertical force used when the player is grounded and entering this state.
+    // Vertical value used when the player first enters this state to keep them grounded and stable.
     [SerializeField] private float stickForce = -5f;
 
     public override void EnterState()
     {
-        // Reset the player's vertical velocity when entering this state.
+        // Reset vertical velocity when entering the normal state to keep the player grounded.
         player.VerticalSpeed = stickForce;
+
+        player.AnimHub.PlayAnimation("Dash", 0.2f);
     }
 
     public override void UpdateState()
     {
-        // Read the player's current input direction from the camera-relative movement system.
+        // Convert the camera-relative input into a flat movement direction for the player.
         player.MoveDirection = player.GetInputDirection();
 
-        // If there is input, use normal walk speed; otherwise stop the player.
-        player.CurrentSpeed = InputHub.Instance.Move.magnitude != 0f ? moveSpeed : 0f;
+        // Scale the input magnitude by the normal move speed to determine how fast the player should move.
+        player.CurrentSpeed = InputHub.Instance.Move.magnitude * moveSpeed;
 
-        // Keep the last valid facing direction if the player is not currently moving.
+        // Play the correct animation based on whether the player is idle, walking, or running.
+        if (player.CurrentSpeed == 0f)
+        {
+            player.AnimHub.PlayAnimation("Idle", 0.2f);
+        }
+        else
+        {
+            player.AnimHub.PlayAnimation(player.CurrentSpeed <= 3f ? "Walk" : "Run", 0.2f);
+        }
+
+        // Keep the last valid facing direction when the player is not actively moving.
         player.LookDirection = player.MoveDirection != Vector3.zero ? player.MoveDirection : player.LookDirection;
 
-        // Rotate the player smoothly toward the direction they are facing.
+        // Smoothly rotate the player toward the direction they are facing.
         player.FaceDirection();
     }
 
     public override void ChangeState()
     {
-        // Check for transitions to other states like attacking, jumping, or stunned.
+        // Check whether the player should switch to a different state such as attack, jump, or stunned.
     }
 
     public override void ExitState()
     {
-        // Perform any cleanup needed before leaving this state.
+        // Any cleanup for leaving this state should happen here.
     }
 }
