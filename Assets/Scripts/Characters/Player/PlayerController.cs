@@ -1,97 +1,113 @@
 using UnityEngine;
 
-// Handles player movement and facing logic using input from the shared InputHub.
+// Main player controller responsible for movement, facing, animation, and state transitions.
 [RequireComponent(typeof(CharacterController))]
 public class PlayerController : MonoBehaviour
 {
-    // Reference to the CharacterController used to move the player.
-    private CharacterController controller;
+    // Reference to the CharacterController used to move the player physically through the world.
+    public CharacterController Controller { get; private set; }
 
-    // Main camera transform, used to align movement with the camera's axes.
-    private Transform cam;
+    // Reference to the animation system so movement states can trigger the correct animation clips.
+    public AnimationHub AnimHub { get; private set; }
+
+    // The player's active behavior state.
+    public PlayerState CurrentState { get; private set; }
+
+    // Default movement state used when the player is not in a special action state.
+    // Created in Start so the controller can enter a valid state immediately.
+    [field: SerializeField] public PlayerNormalState NormalState { get; private set; }
 
     [Header("Collision Settings")]
-    // Small downward offset for checking whether the player is near the ground.
-    [SerializeField] private Vector3 groundOffset = new Vector3(0, -0.1f, 0);
+    // Small downward offset used to check whether the player is grounded.
+    [field: SerializeField] public Vector3 GroundOffset { get; private set; } = new Vector3(0, -0.1f, 0);
 
-    // Forward offset used for obstacle or surface detection checks.
-    [SerializeField] private Vector3 forwardOffset = new Vector3(0, 0, 0.1f);
+    // Extra forward offset used for collision or obstacle checks.
+    [field: SerializeField] public Vector3 ForwardOffset { get; private set; } = new Vector3(0, 0, 0.1f);
 
-    // Radius used for collision/proximity checks.
-    [SerializeField] private float checkRadius = 0.2f;
+    // Radius used for ground and obstacle detection checks.
+    [field: SerializeField] public float CheckRadius { get; private set; } = 0.2f;
 
-    [Header("Movement Settings")]
-    // Base speed applied to the player when moving.
-    [SerializeField] private float moveSpeed = 5f;
+    // Desired movement direction in world space based on the input and camera orientation.
+    public Vector3 MoveDirection { get; set; }
 
-    // Additional stick-based force, kept for tuning or future movement adjustments.
-    [SerializeField] private float stickForce = -5f;
+    // The direction the player is currently facing.
+    public Vector3 LookDirection { get; set; }
 
-    // Gravity value used for vertical motion if implemented later.
-    [SerializeField] private float gravity = -20f;
+    // Current movement speed calculated from the active state and input magnitude.
+    public float CurrentSpeed { get; set; }
 
-    // Direction the player is trying to move in world space.
-    private Vector3 moveDirection;
+    // Vertical velocity used for gravity or grounded force logic.
+    public float VerticalSpeed { get; set; }
 
-    // Last valid direction the player is facing.
-    private Vector3 lookDirection;
-
-    // Current move speed after input is considered.
-    private float currentSpeed;
-
-    // Vertical velocity used for gravity/falling behavior.
-    private float verticalSpeed;
-
-    // Tracks whether the player is currently grounded.
-    private bool isGrounded;
+    // Camera transform used to convert input into world-relative movement.
+    private Transform cam;
 
     private void Start()
     {
-        // Cache the CharacterController component for movement calls.
-        controller = GetComponent<CharacterController>();
+        // Cache the CharacterController used to move the player.
+        Controller = GetComponent<CharacterController>();
 
-        // Get the active camera so movement can be relative to the camera direction.
+        // Grab the animation controller attached to the player hierarchy.
+        AnimHub = GetComponentInChildren<AnimationHub>();
+
+        // Store the camera so movement can be relative to camera direction.
         cam = Camera.main.transform;
+
+        // Build the default state and assign it to the controller.
+        NormalState = new PlayerNormalState(this);
+
+        // Start the player in the normal movement state.
+        SetState(NormalState);
     }
 
     private void Update()
     {
-        // Combine camera-right and camera-forward movement vectors with input values.
-        moveDirection = cam.right * InputHub.Instance.Move.x + cam.forward * InputHub.Instance.Move.y;
+        // Run the current state's per-frame logic.
+        CurrentState?.UpdateState();
 
-        // Remove vertical camera tilt so the player moves along a flat plane.
-        moveDirection.y = 0;
-        moveDirection = moveDirection.normalized;
+        // Give the state a chance to decide whether it should transition to another state.
+        CurrentState?.ChangeState();
 
-        // If there is input, move at the configured speed; otherwise stop.
-        currentSpeed = InputHub.Instance.Move.magnitude != 0f ? moveSpeed : 0f;
+        // Apply the final movement vector calculated by the state.
+        ApplyMovement();
+    }
 
-        // Keep the last facing direction when the player is not actively moving.
-        lookDirection = moveDirection != Vector3.zero ? moveDirection : lookDirection;
+    public void SetState(PlayerState newState)
+    {
+        // Exit the previous state so it can clean up before switching.
+        CurrentState?.ExitState();
 
-        // Smoothly rotate the player toward the movement direction at a fixed angular speed.
-        transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(lookDirection), 750f * Time.deltaTime);
+        // Assign the new state and immediately activate it.
+        CurrentState = newState;
+        CurrentState?.EnterState();
+    }
 
-        // Check whether the player is standing on a solid surface by probing below the character.
-        // This uses a small sphere cast/check at the player's current position with a downward offset.
-        isGrounded = verticalSpeed <= 0f && Physics.CheckSphere(transform.position + groundOffset, checkRadius, LayerMask.GetMask("Solid"));
+    public Vector3 GetInputDirection()
+    {
+        // Convert the input vector into a direction relative to the camera's orientation.
+        Vector3 direction = cam.right * InputHub.Instance.Move.x + cam.forward * InputHub.Instance.Move.y;
 
-        // If grounded, keep the player planted on the surface and apply a small stick force.
-        // Otherwise, apply gravity so the player falls when not supported.
-        if (isGrounded)
-        {
-            verticalSpeed = stickForce;
-        }
-        else
-        {
-            verticalSpeed += gravity * Time.deltaTime;
-        }
+        // Ignore vertical camera tilt so movement stays aligned to the ground plane.
+        direction.y = 0;
+        return direction.normalized;
+    }
 
-        // Apply velocity based on the movement direction and current vertical speed.
-        Vector3 velocity = moveDirection * currentSpeed;
-        velocity.y = verticalSpeed;
+    public void FaceDirection(float turnSpeed = 750f)
+    {
+        // Ignore the rotation request if there is no valid facing direction.
+        if (LookDirection == Vector3.zero) return;
 
-        // Move the character using the CharacterController for physics-like movement.
-        controller.Move(velocity * Time.deltaTime);
+        // Smoothly rotate the player toward the face direction using a turn speed.
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(LookDirection), turnSpeed * Time.deltaTime);
+    }
+
+    public void ApplyMovement()
+    {
+        // Combine the desired movement direction and speed into a velocity vector.
+        Vector3 velocity = MoveDirection * CurrentSpeed;
+        velocity.y = VerticalSpeed;
+
+        // Move the CharacterController using frame-rate-independent delta timing.
+        Controller.Move(velocity * Time.deltaTime);
     }
 }
